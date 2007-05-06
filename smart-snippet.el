@@ -272,26 +272,39 @@ more information."
   ;; template body.  It should be noted that the bounded overlay is
   ;; sized to be one character larger than the template body text.
   ;; This enables our keymap to be active when a field happens to be
-  ;; the last item in a template.  We disable abbrev mode to prevent
-  ;; our template from triggering another abbrev expansion (I do not
-  ;; know if the use of `insert' will actually trigger abbrevs).
-  (let ((abbrev-mode nil))
+  ;; the last item in a template.
+  (let ((start (point))
+	(field-markers nil))
     (setq snippet (make-snippet :bound (snippet-make-bound-overlay)))
-    (let ((start (point))
-          (count 0))
-      (dolist (line (snippet-split-string template (snippet-split-regexp) t))
-        (cond ((string-equal snippet-line-terminator line)
-               (insert "\n"))
-              ((string-equal snippet-indent line)
-               (indent-according-to-mode))
-	      ((string-equal snippet-exit-identifier line)
-	       (setf (snippet-exit-marker snippet) (point-marker)))
-              (t
-               (insert line))))
-      (move-overlay (snippet-bound snippet) start (1+ (point))))
+    (insert template)
+    (move-overlay (snippet-bound snippet) start (1+ (point)))
 
+    ;; Step 3: Find and record each field's markers
+    (goto-char (overlay-start (snippet-bound snippet)))
+    (while (re-search-forward (snippet-field-regexp)
+                              (overlay-end (snippet-bound snippet)) 
+                              t)
+      (let ((start (copy-marker (match-beginning 0) t)))
+        (replace-match (if (match-beginning 2) "\\2" ""))
+	(push (cons start (copy-marker (point) t)) field-markers)))
 
-    ;; Step 3: Insert the exit marker so we know where to move point
+    ;; Step 4: Find exit marker
+    (goto-char (overlay-start (snippet-bound snippet)))
+    (while (search-forward snippet-exit-identifier
+			   (overlay-end (snippet-bound snippet)) 
+			   t)
+      (replace-match "")
+      (setf (snippet-exit-marker snippet) (copy-marker (point) t)))
+
+    ;; step 5: Do necessary indentation
+    (goto-char (overlay-start (snippet-bound snippet)))
+    (while (search-forward snippet-indent
+			   (overlay-end (snippet-bound snippet)) 
+			   t)
+      (replace-match "")
+      (indent-according-to-mode))
+    
+    ;; Step 6: Insert the exit marker so we know where to move point
     ;; to when user is done with snippet.  If they did not specify
     ;; where point should land, set the exit marker to the end of the
     ;; snippet. 
@@ -304,24 +317,18 @@ more information."
   
     (set-marker-insertion-type (snippet-exit-marker snippet) t)
 
-    ;; Step 4: Create field overlays for each field and insert any
+    ;; Step 7: Create field overlays for each field and insert any
     ;; default values for the field.
-    (goto-char (overlay-start (snippet-bound snippet)))
-    (while (re-search-forward (snippet-field-regexp)
-                              (overlay-end (snippet-bound snippet)) 
-                              t)
-      (let ((field (snippet-make-field-overlay (match-string 2)))
-            (start (match-beginning 0)))
-        (push field (snippet-fields snippet))
-        (replace-match (if (match-beginning 2) "\\2" ""))
-        (move-overlay field start (point))))
+    (dolist (marker-pair field-markers)
+      (let ((field (snippet-make-field-overlay
+		    (buffer-substring (car marker-pair)
+				      (cdr marker-pair)))))
+	(push field (snippet-fields snippet))
+	(move-overlay field
+		      (car marker-pair)
+		      (cdr marker-pair)))))
     
-    ;; These are reversed so they are in order of how they appeared in
-    ;; the template as we index into this list when cycling field to
-    ;; field. 
-    (setf (snippet-fields snippet) (reverse (snippet-fields snippet))))
-
-  ;; Step 5: Position the point at the first field or the end of the
+  ;; Step 8: Position the point at the first field or the end of the
   ;; template body if no fields are present.  We need to take into
   ;; consideration the special case where the first field is at the
   ;; start of the snippet (otherwise the call to snippet-next-field
@@ -332,6 +339,5 @@ more information."
         (goto-char (overlay-start first))
       (goto-char (overlay-start (snippet-bound snippet)))
       (snippet-next-field))))
-
 
 ;;; smart-snippet.el ends here
