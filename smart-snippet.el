@@ -5,7 +5,7 @@
 ;; Author: pluskid.zju@gmail.com
 ;; Version: $Id: smart-snippet.el,v 0.0 2007/05/05 23:06:37 kid Exp $
 ;; Keywords: snippet smart condition
-;; X-URL: not distributed yet
+;; X-URL: http://code.google.com/p/smart-snippet/
 
 ;; This program is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -80,15 +80,18 @@ snippet's condition can be satisfied."
 			     major-mode))))
 	 (snippet-list (gethash abbrev table)))
     (if (not snippet-list)		; no abbrev found
-	(insert abbrev " ")
+	(progn (insert abbrev)
+	       nil)			; let abbrev insert extra space
       (while (and snippet-list
 		  (not (apply
 			'smart-snippet-try-expand
 			abbrev
 			(car snippet-list))))
 	(setq snippet-list (cdr snippet-list)))
-      (when (not snippet-list)
-	(insert abbrev " ")))))		; no abbrev satisfied
+      (if (not snippet-list)
+	  (progn (insert abbrev)
+		 nil)                   ; let abbrev insert extra space
+	t))))
 
 (defun smart-snippet-try-expand (abbrev condition template)
   "Test CONDITION, if it satisfied, expand ABBREV with TEMPLATE
@@ -137,8 +140,7 @@ table name ends in \"-abbrev-table\", it is stripped."
 		      abbrev-name
 		      template
 		      condition)
-	     (smart-snippet-expand ,abbrev-name ,table)
-	     t)) ; return t to disable inserting an extra space
+	     (smart-snippet-expand ,abbrev-name ,table)))
 	(put abbrev-expansion 'no-self-insert t)
 	abbrev-expansion))
   
