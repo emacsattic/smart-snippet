@@ -103,6 +103,9 @@
 ;;  
 ;; This will work fine. And you can choose appropriate characters
 ;; for different major-mode(language).
+;; ***NOTE*** I'm modifying `snippet-insert' in snippet.el since
+;; there're some bugs in it. The current version already don't need
+;; this tricky things any more(but you can still use it).
 
 ;;; Implementation Notes:
 
@@ -268,5 +271,138 @@ SNIPPET-LIST.  On how to write each abbrev item, please refer to
 (make-variable-buffer-local 'snippet-indent)
 (make-variable-buffer-local 'snippet-exit-identifier)
 (make-variable-buffer-local 'snippet-field-identifier)
+
+;;; some snippet.el function rewrite
+
+;; Reason:
+
+;; (setq snippet-exit-identifier "$;")
+;; 
+;; This is a triky. The default identifier is "$."
+;; When you write a snippet(for c/c++) like this:
+;;
+;;  if ($${condition})
+;;  {$>
+;;  $.$>
+;;  }$>
+;;
+;; The last "}" won't indent correctly. since there is a "$." at the
+;; previous line which is not a complete sentence. So I use "$;" which
+;; has a ";" character at the end. This is exactly the character for
+;; terminating a sentence in c/c++. Thus the "}" can indent correctly.
+;; But this is only a solution for c/c++. If other languages have
+;; similar problems, it won't be easy to fix it. So a better way is
+;; to rewrite the `snippet-insert' function in snippet.el so that it
+;; removes the "$." character before it begins to do indentation (or
+;; it just never insert it).
+
+;; Solution:
+
+(defun snippet-split-regexp ()
+  "Return a regexp to split the template into component parts."
+  (concat (regexp-quote snippet-line-terminator)
+          "\\|"
+          (regexp-quote snippet-indent)
+	  "\\|"
+	  (regexp-quote snippet-exit-identifier)))
+
+(defun snippet-insert (template)
+  "Insert a snippet into the current buffer at point.  
+TEMPLATE is a string that may optionally contain fields which are
+specified by `snippet-field-identifier'.  Fields may optionally also
+include default values delimited by `snippet-field-default-beg-char'
+and `snippet-field-default-end-char'.
+
+For example, the following template specifies two fields which have
+the default values of \"element\" and \"sequence\":
+
+  \"for $${element} in $${sequence}:\"
+
+In the next example, only one field is specified and no default has
+been provided:
+
+  \"import $$\"
+
+This function may be called interactively, in which case, the TEMPLATE
+is prompted for.  However, users do not typically invoke this function
+interactively, rather it is most often called as part of an abbrev
+expansion.  See `snippet-abbrev' and `snippet-with-abbrev-table' for
+more information."
+  (interactive "sSnippet template: ")
+
+  ;; Step 1: Ensure only one snippet exists at a time
+  (snippet-cleanup)
+
+  ;; Step 2: Create a new snippet and add the overlay to bound the
+  ;; template body.  It should be noted that the bounded overlay is
+  ;; sized to be one character larger than the template body text.
+  ;; This enables our keymap to be active when a field happens to be
+  ;; the last item in a template.
+  (let ((start (point))
+	(field-markers nil))
+    (setq snippet (make-snippet :bound (snippet-make-bound-overlay)))
+    (insert template)
+    (move-overlay (snippet-bound snippet) start (1+ (point)))
+
+    ;; Step 3: Find and record each field's markers
+    (goto-char (overlay-start (snippet-bound snippet)))
+    (while (re-search-forward (snippet-field-regexp)
+                              (overlay-end (snippet-bound snippet)) 
+                              t)
+      (let ((start (copy-marker (match-beginning 0) t)))
+        (replace-match (if (match-beginning 2) "\\2" ""))
+	(push (cons start (copy-marker (point) t)) field-markers)))
+
+    ;; Step 4: Find exit marker
+    (goto-char (overlay-start (snippet-bound snippet)))
+    (while (search-forward snippet-exit-identifier
+			   (overlay-end (snippet-bound snippet)) 
+			   t)
+      (replace-match "")
+      (setf (snippet-exit-marker snippet) (copy-marker (point) t)))
+
+    ;; step 5: Do necessary indentation
+    (goto-char (overlay-start (snippet-bound snippet)))
+    (while (search-forward snippet-indent
+			   (overlay-end (snippet-bound snippet)) 
+			   t)
+      (replace-match "")
+      (indent-according-to-mode))
+    
+    ;; Step 6: Insert the exit marker so we know where to move point
+    ;; to when user is done with snippet.  If they did not specify
+    ;; where point should land, set the exit marker to the end of the
+    ;; snippet. 
+    (goto-char (overlay-start (snippet-bound snippet)))
+    
+    (unless (snippet-exit-marker snippet)
+      (let ((end (overlay-end (snippet-bound snippet))))
+        (goto-char (if (= end (point-max)) end (1- end))))
+      (setf (snippet-exit-marker snippet) (point-marker)))
+  
+    (set-marker-insertion-type (snippet-exit-marker snippet) t)
+
+    ;; Step 7: Create field overlays for each field and insert any
+    ;; default values for the field.
+    (dolist (marker-pair field-markers)
+      (let ((field (snippet-make-field-overlay
+		    (buffer-substring (car marker-pair)
+				      (cdr marker-pair)))))
+	(push field (snippet-fields snippet))
+	(move-overlay field
+		      (car marker-pair)
+		      (cdr marker-pair)))))
+    
+  ;; Step 8: Position the point at the first field or the end of the
+  ;; template body if no fields are present.  We need to take into
+  ;; consideration the special case where the first field is at the
+  ;; start of the snippet (otherwise the call to snippet-next-field
+  ;; will go past it).
+  (let ((bound (snippet-bound snippet))
+        (first (car (snippet-fields snippet))))
+    (if (and first (= (overlay-start bound) (overlay-start first)))
+        (goto-char (overlay-start first))
+      (goto-char (overlay-start (snippet-bound snippet)))
+      (snippet-next-field))))
 
 ;;; smart-snippet.el ends here
