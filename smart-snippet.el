@@ -178,20 +178,27 @@ Optional ON means to also count being on a comment start."
 	(and (not (bobp))
 	     (eq (char-syntax (preceding-char)) ?\<)))))
 
+(defun smart-snippet-make-snippet-function-symbol
+  (abbrev-name abbrev-table)
+  (intern
+   (concat "smart-snippet-abbrev-"
+	   (snippet-strip-abbrev-table-suffix
+	    (symbol-name abbrev-table))
+	   "-"
+	   abbrev-name)))
+  
 (defun smart-snippet-make-abbrev-expansion-hook
   (abbrev-table abbrev-name template condition)
   "Define a function with the `no-self-insert' property set non-nil.
 The function name is composed of \"smart-snippet-abbrev-\", the
 abbrev table name, and the name of the abbrev.  If the abbrev
 table name ends in \"-abbrev-table\", it is stripped."
-  (let ((abbrev-expansion (intern
-			   (concat "smart-snippet-abbrev-"
-				   (snippet-strip-abbrev-table-suffix
-                                    (symbol-name abbrev-table))
-                                   "-"
-                                   abbrev-name))))
+  (let ((abbrev-expansion
+	 (smart-snippet-make-snippet-function-symbol abbrev-name
+						     abbrev-table)))
         (fset abbrev-expansion 
           `(lambda ()
+	     (interactive)
 	     ,(format (concat "Abbrev expansion hook for \"%s\".\n"
 			      "Expand to the following snippet:\n\n%s"
 			      "\n\nif the following condition satisfied\n\n%s")
@@ -264,6 +271,42 @@ SNIPPET-LIST.  On how to write each abbrev item, please refer to
 				 template
 				 condition))))))
 
+(defun smart-snippet-set-snippet-key
+  (keymap abbrev-name abbrev-table key)
+  "Some snippet can't be triggered by the default abbrev expansion.
+E.g. you can't have a snippet '{' to be expand into '{ }' because
+the default abbrev expansion ignore punctuations. So we must bind
+them to the snippet explicitly.
+
+KEYMAP is the keymap to define key.
+ABBREV-NAME is the abbrev you used to define the snippet.
+ABBREV-TABLE is the table in which you define this snippet(must be
+quoted).
+KEY is which key you want to bind to.
+
+There is an example:
+  (smart-snippet-set-snippet-key
+    c++-mode-map 'c++-mode-abbrev-table \"{\" \"{\")"
+  (define-key
+    keymap
+    key
+    (smart-snippet-make-snippet-function-symbol abbrev-name
+						abbrev-table)))
+
+(defmacro smart-snippet-with-keymap
+  (keymap abbrev-table &rest map-list)
+  (let ((table (gensym))
+	(map (gensym)))
+    `(let ((,table ,abbrev-table)
+	   (,map ,keymap))
+       (progn
+	 ,@(loop for (name key) in map-list
+		 collect (list 'smart-snippet-set-snippet-key
+			       map
+			       name
+			       table
+			       key))))))
+  
 
 ;;; Make some variables in snippet.el buffer local
 (make-variable-buffer-local 'snippet-field-default-beg-char)
