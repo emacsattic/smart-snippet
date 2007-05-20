@@ -136,10 +136,21 @@ snippet's condition can be satisfied."
 		    (smart-snippet-abbrev-table
 		     (format "%s-abbrev-table"
 			     major-mode))))
-	 (snippet-list (gethash abbrev table)))
+	 (snippet-list (gethash abbrev table))
+	 ;; since the default abbrev expansion is case
+	 ;; sensitive, if I type 'If' in the comment, I
+	 ;; should get 'If', not 'if'. Smart-snippet
+	 ;; don't know what the user has typed, so just
+	 ;; let the default abbrev mechanism to expand
+	 ;; and then we get the expansion.
+	 (default-expansion
+	   (buffer-substring-no-properties (- (point)
+					      (length abbrev))
+					   (point))))
+    (backward-delete-char (length abbrev))
     (if (not snippet-list)		; no abbrev found
-	(progn (insert abbrev)
-	       nil)			; let abbrev insert extra space
+	(progn (insert default-expansion)
+	       nil)			; permit the self-insert-command
       (while (and snippet-list
 		  (not (apply
 			'smart-snippet-try-expand
@@ -147,7 +158,7 @@ snippet's condition can be satisfied."
 			(car snippet-list))))
 	(setq snippet-list (cdr snippet-list)))
       (if (not snippet-list)
-	  (progn (insert abbrev)
+	  (progn (insert default-expansion)
 		 nil)                   ; let abbrev insert extra space
 	t))))
 
@@ -246,7 +257,7 @@ variables are available:
 	     table)
   
     ;; then setup the abbrev-table hook
-    (define-abbrev (symbol-value abbrev-table) abbrev-name ""
+    (define-abbrev (symbol-value abbrev-table) abbrev-name abbrev-name
       (smart-snippet-make-abbrev-expansion-hook
        abbrev-table abbrev-name))))
 
