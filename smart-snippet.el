@@ -127,7 +127,8 @@
 
 (require 'snippet)
 
-(defun smart-snippet-expand (abbrev &optional abbrev-table)
+(defun smart-snippet-expand
+  (abbrev &optional abbrev-table call-directly)
   "Search the snippets related to ABBREV in TABLE(if supplied)
 or the major-mode's default smart-snippet table. Expand the first
 snippet whose condition is satisfied. Expand to one space if no
@@ -144,10 +145,16 @@ snippet's condition can be satisfied."
 	 ;; let the default abbrev mechanism to expand
 	 ;; and then we get the expansion.
 	 (default-expansion
-	   (buffer-substring-no-properties (- (point)
-					      (length abbrev))
-					   (point))))
-    (backward-delete-char (length abbrev))
+	   (if call-directly
+	       abbrev
+	     (buffer-substring-no-properties (- (point)
+						(length abbrev))
+					     (point)))))
+    ;; if not from expanding abbrev(i.e. triggered directly
+    ;; by binding keys), don't backward delete(since there
+    ;; is now default expanded text)
+    (unless call-directly
+      (backward-delete-char (length abbrev)))
     (if (not snippet-list)		; no abbrev found
 	(progn (insert default-expansion)
 	       nil)			; permit the self-insert-command
@@ -210,9 +217,11 @@ table name ends in \"-abbrev-table\", it is stripped."
     (if (functionp abbrev-expansion)
 	abbrev-expansion
       (fset abbrev-expansion 
-	    `(lambda ()
+	    `(lambda (&optional call-directly)
 	       (interactive)
-	       (smart-snippet-expand ,abbrev-name ,table)))
+	       (smart-snippet-expand ,abbrev-name
+				     ,table
+				     call-directly)))
       (put abbrev-expansion 'no-self-insert t)
       abbrev-expansion)))
   
@@ -297,8 +306,12 @@ There is an example:
   (define-key
     keymap
     key
-    (smart-snippet-make-snippet-function-symbol abbrev-name
-						abbrev-table)))
+    `(lambda ()
+       (interactive)
+       (funcall
+	',(smart-snippet-make-snippet-function-symbol abbrev-name
+						      abbrev-table)
+	t))))
 
 (defmacro smart-snippet-with-keymap
   (keymap abbrev-table &rest map-list)
