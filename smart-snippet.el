@@ -188,7 +188,7 @@ Optional ON means to also count being on a comment start."
 	   abbrev-name)))
   
 (defun smart-snippet-make-abbrev-expansion-hook
-  (abbrev-table abbrev-name template condition)
+  (abbrev-table abbrev-name)
   "Define a function with the `no-self-insert' property set non-nil.
 The function name is composed of \"smart-snippet-abbrev-\", the
 abbrev table name, and the name of the abbrev.  If the abbrev
@@ -196,18 +196,14 @@ table name ends in \"-abbrev-table\", it is stripped."
   (let ((abbrev-expansion
 	 (smart-snippet-make-snippet-function-symbol abbrev-name
 						     abbrev-table)))
-        (fset abbrev-expansion 
-          `(lambda ()
-	     (interactive)
-	     ,(format (concat "Abbrev expansion hook for \"%s\".\n"
-			      "Expand to the following snippet:\n\n%s"
-			      "\n\nif the following condition satisfied\n\n%s")
-		      abbrev-name
-		      template
-		      condition)
-	     (smart-snippet-expand ,abbrev-name ,table)))
-	(put abbrev-expansion 'no-self-insert t)
-	abbrev-expansion))
+    (if (functionp abbrev-expansion)
+	abbrev-expansion
+      (fset abbrev-expansion 
+	    `(lambda ()
+	       (interactive)
+	       (smart-snippet-expand ,abbrev-name ,table)))
+      (put abbrev-expansion 'no-self-insert t)
+      abbrev-expansion)))
   
 (defun smart-snippet-abbrev-table (abbrev-table-name)
   (let ((table-symbol (intern
@@ -252,7 +248,7 @@ variables are available:
     ;; then setup the abbrev-table hook
     (define-abbrev (symbol-value abbrev-table) abbrev-name ""
       (smart-snippet-make-abbrev-expansion-hook
-       abbrev-table abbrev-name template condition))))
+       abbrev-table abbrev-name))))
 
 (defmacro smart-snippet-with-abbrev-table
   (abbrev-table &rest snippet-list)
