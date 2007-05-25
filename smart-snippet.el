@@ -270,25 +270,25 @@ variables are available:
       (smart-snippet-make-abbrev-expansion-hook
        abbrev-table abbrev-name))))
 
-(defmacro smart-snippet-with-abbrev-table
-  (abbrev-table &rest snippet-list)
-    "Establish a set of abbrevs for snippet templates.
-Set up a series of snippet abbreviations in the ABBREV-TABLE (note
-that ABBREV-TABLE must be quoted.  The abbrevs are specified in
-SNIPPET-LIST.  On how to write each abbrev item, please refer to
-`smart-snippet-abbrev-table'."
-    (let ((table (gensym)))
-      `(let ((,table ,abbrev-table))
-	 (progn
-	   ,@(loop for (name template condition) in snippet-list
-		   collect (list 'smart-snippet-abbrev
-				 table
-				 name
-				 template
-				 condition))))))
+;; (defmacro smart-snippet-with-abbrev-table
+;;   (abbrev-table &rest snippet-list)
+;;     "Establish a set of abbrevs for snippet templates.
+;; Set up a series of snippet abbreviations in the ABBREV-TABLE (note
+;; that ABBREV-TABLE must be quoted.  The abbrevs are specified in
+;; SNIPPET-LIST.  On how to write each abbrev item, please refer to
+;; `smart-snippet-abbrev-table'."
+;;     (let ((table (gensym)))
+;;       `(let ((,table ,abbrev-table))
+;; 	 (progn
+;; 	   ,@(loop for (name template condition) in snippet-list
+;; 		   collect (list 'smart-snippet-abbrev
+;; 				 table
+;; 				 name
+;; 				 template
+;; 				 condition))))))
 
 (defun smart-snippet-set-snippet-key
-  (keymap abbrev-name abbrev-table key)
+  (keymap abbrev-table abbrev-name key)
   "Some snippet can't be triggered by the default abbrev expansion.
 E.g. you can't have a snippet '{' to be expand into '{ }' because
 the default abbrev expansion ignore punctuations. So we must bind
@@ -313,20 +313,59 @@ There is an example:
 						      abbrev-table)
 	t))))
 
-(defmacro smart-snippet-with-keymap
-  (keymap abbrev-table &rest map-list)
-  (let ((table (gensym))
-	(map (gensym)))
-    `(let ((,table ,abbrev-table)
-	   (,map ,keymap))
-       (progn
-	 ,@(loop for (name key) in map-list
-		 collect (list 'smart-snippet-set-snippet-key
-			       map
-			       name
-			       table
-			       key))))))
-  
+;; (defmacro smart-snippet-with-keymap
+;;   (keymap abbrev-table &rest map-list)
+;;   (let ((table (gensym))
+;; 	(map (gensym)))
+;;     `(let ((,table ,abbrev-table)
+;; 	   (,map ,keymap))
+;;        (progn
+;; 	 ,@(loop for (name key) in map-list
+;; 		 collect (list 'smart-snippet-set-snippet-key
+;; 			       map
+;; 			       name
+;; 			       table
+;; 			       key))))))
+
+(defun smart-snippet-flatten-1 (list)
+  (cond ((atom list) list)
+	((listp (car list))
+	 (append (car list)
+		 (smart-snippet-flatten-1 (cdr list))))
+	(t (append (list (car list))
+		   (smart-snippet-flatten-1 (cdr list))))))
+(defun smart-snippet-quote-element (list)
+  (loop for item in list
+	collect (list 'quote item)))
+(defmacro smart-snippet-with-abbrev-tables
+  (abbrev-tables &rest snippets)
+  (let ((tables (smart-snippet-quote-element abbrev-tables)))
+    `(progn
+       ,@(smart-snippet-flatten-1
+	  (loop for table in tables
+		collect (loop for snippet in snippets
+			      collect (append
+				       (list
+					'smart-snippet-abbrev
+					table)
+				       snippet)))))))
+(defmacro smart-snippet-with-keymaps
+  (keymap-and-abbrev-tables &rest map-list)
+  (let ((kaymap-and-abbrev-tables
+	 (smart-snippet-quote-element keymap-and-abbrev-tables)))
+    `(progn
+       ,@(smart-snippet-flatten-1
+	  (loop for map-and-table in keymap-and-abbrev-tables
+		collect (loop for key-mapping in map-list
+			      collect (list
+				       'smart-snippet-set-snippet-key
+				       (car map-and-table)
+				       (list 'quote
+					     (cadr map-and-table))
+				       (car key-mapping)
+				       (cadr key-mapping))))))))
+					
+
 
 ;;; Make some variables in snippet.el buffer local
 (make-variable-buffer-local 'snippet-field-default-beg-char)
