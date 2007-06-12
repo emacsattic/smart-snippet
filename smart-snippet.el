@@ -169,7 +169,7 @@ snippet's condition can be satisfied."
 		 nil)                   ; let abbrev insert extra space
 	t))))
 
-(defun smart-snippet-try-expand (abbrev condition template)
+(defun smart-snippet-try-expand (abbrev template condition)
   "Test CONDITION, if it satisfied, expand ABBREV with TEMPLATE
 using `snippet-insert'. Returning t to indicate that this expansion
 didn't take place, should try the successive one."
@@ -259,10 +259,15 @@ variables are available:
 "
   ;; first store the snippet template
   (let* ((table (smart-snippet-abbrev-table (symbol-name abbrev-table)))
-	 (snippet-list (gethash abbrev-name table)))
+	 (snippet-list (gethash abbrev-name table))
+	 (snippet (assoc template snippet-list)))
     (puthash abbrev-name
-	     (cons (list condition template)
-		   snippet-list)
+	     (cond ((null snippet)
+		    (cons (list template condition)
+			  snippet-list))
+		   ;; overwrite the snippet of the same template
+		   (t (setcdr snippet (cons condition nil))
+		      snippet-list))
 	     table)
   
     ;; then setup the abbrev-table hook
