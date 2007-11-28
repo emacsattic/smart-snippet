@@ -419,12 +419,6 @@
 (define-key snippet-map (kbd "TAB")             'snippet-next-field)
 (define-key snippet-map (kbd "<S-tab>")         'snippet-prev-field)
 (define-key snippet-map (kbd "<S-iso-lefttab>") 'snippet-prev-field)
-;; properly undo in snippet
-(define-key snippet-map (kbd "C-/")             'snippet-undo)
-(define-key snippet-map (kbd "C-_")             'snippet-undo)
-(define-key snippet-map (kbd "<undo>")          'snippet-undo)
-(define-key snippet-map (kbd "<menu-bar> <edit> <undo>")
-  'snippet-undo)
 
 (defstruct snippet
   "Structure containing the overlays used to display a snippet.
@@ -538,11 +532,12 @@ snippet."
   (goto-char (snippet-exit-marker snippet))
   (snippet-cleanup))
 
-(defun snippet-undo ()
-  "Properly undo in snippet."
-  (interactive)
-  (snippet-exit-snippet)
-  (undo))
+(defun snippet-undo-snippet (abbrev begin end)
+  "Undo inserting this snippet."
+  (let ((buffer-undo-list t))           ; disable undo
+    (snippet-cleanup)
+    (delete-region begin end)
+    (insert abbrev)))
 
 (defun snippet-next-field ()
   "Move point forward to the next field in the `snippet'.
@@ -646,8 +641,12 @@ list if INCLUDE-SEPARATORS-P is non-nil."
           "\\|"
           (regexp-quote snippet-exit-identifier)))
 
-(defun snippet-insert (template)
+(defun snippet-insert (abbrev template)
   "Insert a snippet into the current buffer at point.
+
+ABBREV is the abbrev text that is triggering this snippet, recorded
+for undo information.
+
 TEMPLATE is a string that may optionally contain fields which are
 specified by `snippet-field-identifier'.  Fields may optionally also
 include default values delimited by `snippet-field-default-beg-char'
@@ -786,7 +785,7 @@ name, and the name of the abbrev.  If the abbrev table name ends in
                               "Expands to the following snippet:\n\n%s")
                       abbrev-name
                       template)
-             (snippet-insert ,template)))
+             (snippet-insert ,abbrev-name ,template)))
     (put abbrev-expansion 'no-self-insert t)
     abbrev-expansion))
 
@@ -833,7 +832,8 @@ See also `snippet-abbrev."
 or the major-mode's default smart-snippet table. Expand the first
 snippet whose condition is satisfied. Expand to one space if no
 snippet's condition can be satisfied."
-  (let* ((table (or abbrev-table
+  (let* ((buffer-undo-list t)
+         (table (or abbrev-table
                     (smart-snippet-abbrev-table
                      (format "%s-abbrev-table"
                              major-mode))))
@@ -867,7 +867,18 @@ snippet's condition can be satisfied."
       (if (not snippet-list)
           (progn (insert default-expansion)
                  nil)                   ; let abbrev insert extra space
-        t))))
+        t)))
+
+  (unless (eq buffer-undo-list t)
+    (setq buffer-undo-list
+          (cons `(apply snippet-undo-snippet
+                        ,abbrev
+                        ,(overlay-start (snippet-bound snippet))
+                        ,(overlay-end (snippet-bound snippet)))
+                buffer-undo-list))
+    (setq buffer-undo-list
+          (cons nil
+                buffer-undo-list))))
 
 (defun smart-snippet-try-expand (abbrev template condition)
   "Test CONDITION, if it satisfied, expand ABBREV with TEMPLATE
@@ -877,11 +888,11 @@ didn't take place, should try the successive one."
         (in-comment? (smart-snippet-inside-comment-p))
         (bol? (looking-back "^[[:blank:]]*")))
     (cond ((and (functionp condition) (funcall condition))
-           (snippet-insert template)
+           (snippet-insert abbrev template)
            t)
           ((and (or (symbolp condition) (listp condition))
                 (eval condition))
-           (snippet-insert template)
+           (snippet-insert abbrev template)
            t)
           (t nil))))
 
