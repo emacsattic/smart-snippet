@@ -419,6 +419,12 @@
 (define-key snippet-map (kbd "TAB")             'snippet-next-field)
 (define-key snippet-map (kbd "<S-tab>")         'snippet-prev-field)
 (define-key snippet-map (kbd "<S-iso-lefttab>") 'snippet-prev-field)
+;; properly undo in snippet
+(define-key snippet-map (kbd "C-/")             'snippet-undo)
+(define-key snippet-map (kbd "C-_")             'snippet-undo)
+(define-key snippet-map (kbd "<undo>")          'snippet-undo)
+(define-key snippet-map (kbd "<menu-bar> <edit> <undo>")
+  'snippet-undo)
 
 (defstruct snippet
   "Structure containing the overlays used to display a snippet.
@@ -531,6 +537,12 @@ move the point to that location.  Otherwise, move it to the end of the
 snippet."
   (goto-char (snippet-exit-marker snippet))
   (snippet-cleanup))
+
+(defun snippet-undo ()
+  "Properly undo in snippet."
+  (interactive)
+  (snippet-exit-snippet)
+  (undo))
 
 (defun snippet-next-field ()
   "Move point forward to the next field in the `snippet'.
@@ -963,23 +975,6 @@ variables are available:
       (smart-snippet-make-abbrev-expansion-hook
        abbrev-table abbrev-name))))
 
-;; (defmacro smart-snippet-with-abbrev-table
-;;   (abbrev-table &rest snippet-list)
-;;     "Establish a set of abbrevs for snippet templates.
-;; Set up a series of snippet abbreviations in the ABBREV-TABLE (note
-;; that ABBREV-TABLE must be quoted.  The abbrevs are specified in
-;; SNIPPET-LIST.  On how to write each abbrev item, please refer to
-;; `smart-snippet-abbrev-table'."
-;;     (let ((table (gensym)))
-;;       `(let ((,table ,abbrev-table))
-;;       (progn
-;;         ,@(loop for (name template condition) in snippet-list
-;;                 collect (list 'smart-snippet-abbrev
-;;                               table
-;;                               name
-;;                               template
-;;                               condition))))))
-
 (defun smart-snippet-set-snippet-key
   (keymap abbrev-table abbrev-name key)
   "Some snippet can't be triggered by the default abbrev expansion.
@@ -1005,20 +1000,6 @@ There is an example:
         ',(smart-snippet-make-snippet-function-symbol abbrev-name
                                                       abbrev-table)
         t))))
-
-;; (defmacro smart-snippet-with-keymap
-;;   (keymap abbrev-table &rest map-list)
-;;   (let ((table (gensym))
-;;      (map (gensym)))
-;;     `(let ((,table ,abbrev-table)
-;;         (,map ,keymap))
-;;        (progn
-;;       ,@(loop for (name key) in map-list
-;;               collect (list 'smart-snippet-set-snippet-key
-;;                             map
-;;                             name
-;;                             table
-;;                             key))))))
 
 (defun smart-snippet-flatten-1 (list)
   (cond ((atom list) list)
