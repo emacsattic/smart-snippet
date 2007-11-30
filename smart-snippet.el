@@ -405,12 +405,34 @@
   :type 'string
   :group 'snippet)
 
+(defcustom snippet-skip-same-field nil
+  "*Boolean used to indicate whether to skip the next field if it
+has the same name with current one. For example, if this variable
+is t , for the belowing snippet template for python:
+
+  for $${var} in $${vars}:
+      print \"value of $${var} is %s\" % $${var}
+
+At first you're at 1st $${var} field, pressing TAB you can go to
+$${vars} field. But if you are in the 2nd $${var} field, pressing
+TAB won't take you to the 3rd $${var} field, since they have the
+same name. Instead, you'll exit the snippet in this case. For the
+same reason, when you are in the 3rd $${var} field currently, by
+pressing <S-tab> you'll be brought to the $${vars} field instead
+of the 2nd $${var} field.
+
+If you like this behavior, just turn on this variable. Or you can
+have different behavior in different type of buffers, since it's
+a buffer-local variable.")
+
+
 (make-variable-buffer-local 'snippet-field-default-beg-char)
 (make-variable-buffer-local 'snippet-field-default-end-char)
 (make-variable-buffer-local 'snippet-indent)
 (make-variable-buffer-local 'snippet-exit-identifier)
 (make-variable-buffer-local 'snippet-field-identifier)
 (make-variable-buffer-local 'snippet-escape-char-guard)
+(make-variable-buffer-local 'snippet-skip-same-field)
 
 (defvar snippet-map (make-sparse-keymap)
   "Keymap used while the point is located within a snippet.")
@@ -539,6 +561,17 @@ snippet."
     (delete-region begin end)
     (insert abbrev)))
 
+(defun snippet-field-same-name-p (a b)
+  (string= (overlay-get a 'name)
+           (overlay-get b 'name)))
+(defun snippet-current-field ()
+  (loop for field in fields
+        when (and (>= (point)
+                      (overlay-start field))
+                  (<= (point)
+                      (overlay-end field)))
+        return field))
+
 (defun snippet-next-field ()
   "Move point forward to the next field in the `snippet'.
 If there are no more fields in the snippet, point is moved to the end
@@ -547,10 +580,17 @@ and the snippet reverts to normal text."
   (interactive)
   (let* ((bound (snippet-bound snippet))
          (fields (snippet-fields snippet))
+         (current-field (snippet-current-field))
          (exit (snippet-exit-marker snippet))
          (next-pos (loop for field in fields
                          for start = (overlay-start field)
-                         when (< (point) start) return start)))
+                         when (and (< (point) start)
+                                   (or (not snippet-skip-same-field)
+                                       (null current-field)
+                                       (not (snippet-field-same-name-p
+                                             field
+                                             current-field))))
+                         return start)))
     (if (not (null next-pos))
         (goto-char next-pos)
       (goto-char exit)
@@ -564,10 +604,17 @@ and the snippet reverts to normal text."
   (interactive)
   (let* ((bound (snippet-bound snippet))
          (fields (snippet-fields snippet))
+         (current-field (snippet-current-field))
          (exit (snippet-exit-marker snippet))
          (prev-pos (loop for field in (reverse fields)
-                         for start = (overlay-start field)
-                         when (> (point) start) return start)))
+                         for end = (overlay-end field)
+                         when (and (> (point) end)
+                                   (or (not snippet-skip-same-field)
+                                       (null current-field)
+                                       (not (snippet-field-same-name-p
+                                             field
+                                             current-field))))
+                         return (overlay-start field))))
     (if (not (null prev-pos))
         (goto-char prev-pos)
       (goto-char exit)
