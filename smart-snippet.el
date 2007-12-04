@@ -725,15 +725,18 @@ more information."
   ;; This enables our keymap to be active when a field happens to be
   ;; the last item in a template.
   (let ((start (point))
+        (end (point))
         (field-markers nil))
     (setq snippet (make-snippet :bound (snippet-make-bound-overlay)))
     (insert template)
     (move-overlay (snippet-bound snippet) start (1+ (point)))
+    (setq end (min (point-max)
+                   (overlay-end (snippet-bound snippet))))
 
     ;; Step 3: Protect escape chars
     (goto-char (overlay-start (snippet-bound snippet)))
     (while (re-search-forward "\\\\\\(.\\)"
-                              (overlay-end (snippet-bound snippet))
+                              end
                               t)
       (replace-match (concat snippet-escape-char-guard
                              "\\1"
@@ -742,7 +745,7 @@ more information."
     ;; Step 3: Find and record each field's markers
     (goto-char (overlay-start (snippet-bound snippet)))
     (while (re-search-forward (snippet-field-regexp)
-                              (overlay-end (snippet-bound snippet))
+                              end
                               t)
       (let ((start (copy-marker (match-beginning 0) t)))
         (replace-match (if (match-beginning 2) "\\2" ""))
@@ -751,7 +754,7 @@ more information."
     ;; Step 4: Find exit marker
     (goto-char (overlay-start (snippet-bound snippet)))
     (while (search-forward snippet-exit-identifier
-                           (overlay-end (snippet-bound snippet))
+                           end
                            t)
       (replace-match "")
       (setf (snippet-exit-marker snippet) (copy-marker (point) t)))
@@ -759,7 +762,7 @@ more information."
     ;; step 5: Do necessary indentation
     (goto-char (overlay-start (snippet-bound snippet)))
     (while (search-forward snippet-indent
-                           (overlay-end (snippet-bound snippet))
+                           end
                            t)
       (replace-match "")
       (indent-according-to-mode))
@@ -769,7 +772,7 @@ more information."
     (while (re-search-forward (concat snippet-escape-char-guard
                                       "\\(.\\)"
                                       snippet-escape-char-guard)
-                              (overlay-end (snippet-bound snippet))
+                              end
                               t)
       (replace-match "\\1"))
 
