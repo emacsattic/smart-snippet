@@ -425,6 +425,11 @@ If you like this behavior, just turn on this variable. Or you can
 have different behavior in different type of buffers, since it's
 a buffer-local variable.")
 
+(defvar snippet-orig-buffer-undo-list t
+  "Original buffer undo list.
+Buffer undo list will be disabled during constructing of a snippet.
+This variable is then used to reference the original buffer undo
+list.")
 
 (make-variable-buffer-local 'snippet-field-default-beg-char)
 (make-variable-buffer-local 'snippet-field-default-end-char)
@@ -433,6 +438,7 @@ a buffer-local variable.")
 (make-variable-buffer-local 'snippet-field-identifier)
 (make-variable-buffer-local 'snippet-escape-char-guard)
 (make-variable-buffer-local 'snippet-skip-same-field)
+(make-variable-buffer-local 'snippet-orig-buffer-undo-list)
 
 (defvar snippet-map (make-sparse-keymap)
   "Keymap used while the point is located within a snippet.")
@@ -800,6 +806,18 @@ more information."
                       (car marker-pair)
                       (cdr marker-pair)))))
 
+  ;; Step 7.5: Construct undo information
+  (unless (eq snippet-orig-buffer-undo-list t)
+    (setq snippet-orig-buffer-undo-list
+          (cons (list 'apply 'snippet-undo-snippet
+                        abbrev
+                        (overlay-start (snippet-bound snippet))
+                        (overlay-end (snippet-bound snippet)))
+                snippet-orig-buffer-undo-list))
+    (setq snippet-orig-buffer-undo-list
+          (cons nil
+                snippet-orig-buffer-undo-list)))
+
   ;; Step 8: Position the point at the first field or the end of the
   ;; template body if no fields are present.  We need to take into
   ;; consideration the special case where the first field is at the
@@ -882,8 +900,9 @@ See also `snippet-abbrev."
 or the major-mode's default smart-snippet table. Expand the first
 snippet whose condition is satisfied. Expand to one space if no
 snippet's condition can be satisfied."
-  (let* ((buffer-undo-list t)
-         (table (or abbrev-table
+  (setq snippet-orig-buffer-undo-list buffer-undo-list)
+  (setq buffer-undo-list t)
+  (let* ((table (or abbrev-table
                     (smart-snippet-abbrev-table
                      (format "%s-abbrev-table"
                              major-mode))))
@@ -919,16 +938,8 @@ snippet's condition can be satisfied."
                  nil)                   ; let abbrev insert extra space
         t)))
 
-  (unless (eq buffer-undo-list t)
-    (setq buffer-undo-list
-          (cons `(apply snippet-undo-snippet
-                        ,abbrev
-                        ,(overlay-start (snippet-bound snippet))
-                        ,(overlay-end (snippet-bound snippet)))
-                buffer-undo-list))
-    (setq buffer-undo-list
-          (cons nil
-                buffer-undo-list))))
+  (setq buffer-undo-list snippet-orig-buffer-undo-list)
+  (setq snippet-orig-buffer-undo-list t))
 
 (defun smart-snippet-try-expand (abbrev template condition)
   "Test CONDITION, if it satisfied, expand ABBREV with TEMPLATE
