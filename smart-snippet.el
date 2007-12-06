@@ -731,104 +731,103 @@ more information."
   ;; This enables our keymap to be active when a field happens to be
   ;; the last item in a template.
   (let ((start (point))
-        (end (point))
         (field-markers nil))
-    (setq snippet (make-snippet :bound (snippet-make-bound-overlay)))
-    (insert template)
-    (move-overlay (snippet-bound snippet) start (1+ (point)))
-    (setq end (min (point-max)
-                   (overlay-end (snippet-bound snippet))))
+    (flet ((end () (min (point-max)
+                        (overlay-end (snippet-bound snippet)))))
+      (setq snippet (make-snippet :bound (snippet-make-bound-overlay)))
+      (insert template)
+      (move-overlay (snippet-bound snippet) start (1+ (point)))
 
-    ;; Step 3: Protect escape chars
-    (goto-char (overlay-start (snippet-bound snippet)))
-    (while (re-search-forward "\\\\\\(.\\)"
-                              end
-                              t)
-      (replace-match (concat snippet-escape-char-guard
-                             "\\1"
-                             snippet-escape-char-guard)))
+      ;; Step 3: Protect escape chars
+      (goto-char (overlay-start (snippet-bound snippet)))
+      (while (re-search-forward "\\\\\\(.\\)"
+                                (end)
+                                t)
+        (replace-match (concat snippet-escape-char-guard
+                               "\\1"
+                               snippet-escape-char-guard)))
 
-    ;; Step 3: Find and record each field's markers
-    (goto-char (overlay-start (snippet-bound snippet)))
-    (while (re-search-forward (snippet-field-regexp)
-                              end
-                              t)
-      (let ((start (copy-marker (match-beginning 0) t)))
-        (replace-match (if (match-beginning 2) "\\2" ""))
-        (push (cons start (copy-marker (point) t)) field-markers)))
+      ;; Step 3: Find and record each field's markers
+      (goto-char (overlay-start (snippet-bound snippet)))
+      (while (re-search-forward (snippet-field-regexp)
+                                (end)
+                                t)
+        (let ((start (copy-marker (match-beginning 0) t)))
+          (replace-match (if (match-beginning 2) "\\2" ""))
+          (push (cons start (copy-marker (point) t)) field-markers)))
 
-    ;; Step 4: Find exit marker
-    (goto-char (overlay-start (snippet-bound snippet)))
-    (while (search-forward snippet-exit-identifier
-                           end
-                           t)
-      (replace-match "")
-      (setf (snippet-exit-marker snippet) (copy-marker (point) t)))
+      ;; Step 4: Find exit marker
+      (goto-char (overlay-start (snippet-bound snippet)))
+      (while (search-forward snippet-exit-identifier
+                             (end)
+                             t)
+        (replace-match "")
+        (setf (snippet-exit-marker snippet) (copy-marker (point) t)))
 
-    ;; step 5: Do necessary indentation
-    (goto-char (overlay-start (snippet-bound snippet)))
-    (while (search-forward snippet-indent
-                           end
-                           t)
-      (replace-match "")
-      (indent-according-to-mode))
+      ;; step 5: Do necessary indentation
+      (goto-char (overlay-start (snippet-bound snippet)))
+      (while (search-forward snippet-indent
+                             (end)
+                             t)
+        (replace-match "")
+        (indent-according-to-mode))
 
-    ;; Step 6: Recover escape characters
-    (goto-char (overlay-start (snippet-bound snippet)))
-    (while (re-search-forward (concat snippet-escape-char-guard
-                                      "\\(.\\)"
-                                      snippet-escape-char-guard)
-                              end
-                              t)
-      (replace-match "\\1"))
+      ;; Step 6: Recover escape characters
+      (goto-char (overlay-start (snippet-bound snippet)))
+      (while (re-search-forward (concat snippet-escape-char-guard
+                                        "\\(.\\)"
+                                        snippet-escape-char-guard)
+                                (end)
+                                t)
+        (replace-match "\\1"))
 
-    ;; Step 6: Insert the exit marker so we know where to move point
-    ;; to when user is done with snippet.  If they did not specify
-    ;; where point should land, set the exit marker to the end of the
-    ;; snippet.
-    (goto-char (overlay-start (snippet-bound snippet)))
+      ;; Step 6: Insert the exit marker so we know where to move point
+      ;; to when user is done with snippet.  If they did not specify
+      ;; where point should land, set the exit marker to the end of the
+      ;; snippet.
+      (goto-char (overlay-start (snippet-bound snippet)))
 
-    (unless (snippet-exit-marker snippet)
-      (let ((end (overlay-end (snippet-bound snippet))))
-        (goto-char (if (= end (point-max)) end (1- end))))
-      (setf (snippet-exit-marker snippet) (point-marker)))
+      (unless (snippet-exit-marker snippet)
+        (let ((end (overlay-end (snippet-bound snippet))))
+          (goto-char (if (= end (point-max)) end (1- end))))
+        (setf (snippet-exit-marker snippet) (point-marker)))
 
-    (set-marker-insertion-type (snippet-exit-marker snippet) t)
+      (set-marker-insertion-type (snippet-exit-marker snippet) t)
 
-    ;; Step 7: Create field overlays for each field and insert any
-    ;; default values for the field.
-    (dolist (marker-pair field-markers)
-      (let ((field (snippet-make-field-overlay
-                    (buffer-substring (car marker-pair)
-                                      (cdr marker-pair)))))
-        (push field (snippet-fields snippet))
-        (move-overlay field
-                      (car marker-pair)
-                      (cdr marker-pair)))))
+      ;; Step 7: Create field overlays for each field and insert any
+      ;; default values for the field.
+      (dolist (marker-pair field-markers)
+        (let ((field (snippet-make-field-overlay
+                      (buffer-substring (car marker-pair)
+                                        (cdr marker-pair)))))
+          (push field (snippet-fields snippet))
+          (move-overlay field
+                        (car marker-pair)
+                        (cdr marker-pair)))))
 
-  ;; Step 7.5: Construct undo information
-  (unless (eq snippet-orig-buffer-undo-list t)
-    (setq snippet-orig-buffer-undo-list
-          (cons (list 'apply 'snippet-undo-snippet
+    ;; Step 7.5: Construct undo information
+    (unless (eq snippet-orig-buffer-undo-list t)
+      (setq snippet-orig-buffer-undo-list
+            (cons (list 'apply 'snippet-undo-snippet
                         abbrev
                         (overlay-start (snippet-bound snippet))
                         (overlay-end (snippet-bound snippet)))
-                snippet-orig-buffer-undo-list))
-    (setq snippet-orig-buffer-undo-list
-          (cons nil
-                snippet-orig-buffer-undo-list)))
+                  snippet-orig-buffer-undo-list))
+      (setq snippet-orig-buffer-undo-list
+            (cons nil
+                  snippet-orig-buffer-undo-list)))
 
-  ;; Step 8: Position the point at the first field or the end of the
-  ;; template body if no fields are present.  We need to take into
-  ;; consideration the special case where the first field is at the
-  ;; start of the snippet (otherwise the call to snippet-next-field
-  ;; will go past it).
-  (let ((bound (snippet-bound snippet))
-        (first (car (snippet-fields snippet))))
-    (if (and first (= (overlay-start bound) (overlay-start first)))
-        (goto-char (overlay-start first))
-      (goto-char (overlay-start (snippet-bound snippet)))
-      (snippet-next-field))))
+    ;; Step 8: Position the point at the first field or the end of the
+    ;; template body if no fields are present.  We need to take into
+    ;; consideration the special case where the first field is at the
+    ;; start of the snippet (otherwise the call to snippet-next-field
+    ;; will go past it).
+    (let ((bound (snippet-bound snippet))
+          (first (car (snippet-fields snippet))))
+      (if (and first (= (overlay-start bound) (overlay-start first)))
+          (goto-char (overlay-start first))
+        (goto-char (overlay-start (snippet-bound snippet)))
+        (snippet-next-field)))))
 
 (defun snippet-strip-abbrev-table-suffix (str)
   "Strip a suffix of \"-abbrev-table\" if one is present."
