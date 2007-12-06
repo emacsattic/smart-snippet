@@ -899,8 +899,6 @@ See also `snippet-abbrev."
 or the major-mode's default smart-snippet table. Expand the first
 snippet whose condition is satisfied. Expand to one space if no
 snippet's condition can be satisfied."
-  (setq snippet-orig-buffer-undo-list buffer-undo-list)
-  (setq buffer-undo-list t)
   (let* ((table (or abbrev-table
                     (smart-snippet-abbrev-table
                      (format "%s-abbrev-table"
@@ -918,6 +916,10 @@ snippet's condition can be satisfied."
              (buffer-substring-no-properties (- (point)
                                                 (length abbrev))
                                              (point)))))
+
+    (setq snippet-orig-buffer-undo-list buffer-undo-list)
+    (setq buffer-undo-list t)
+
     ;; if not from expanding abbrev(i.e. triggered directly
     ;; by binding keys), don't backward delete(since there
     ;; is now default expanded text)
@@ -932,13 +934,12 @@ snippet's condition can be satisfied."
                         abbrev
                         (car snippet-list))))
         (setq snippet-list (cdr snippet-list)))
+      (setq buffer-undo-list snippet-orig-buffer-undo-list)
+      (setq snippet-orig-buffer-undo-list t)
       (if (not snippet-list)
           (progn (insert default-expansion)
                  nil)                   ; let abbrev insert extra space
-        t)))
-
-  (setq buffer-undo-list snippet-orig-buffer-undo-list)
-  (setq snippet-orig-buffer-undo-list t))
+        t))))
 
 (defun smart-snippet-try-expand (abbrev template condition)
   "Test CONDITION, if it satisfied, expand ABBREV with TEMPLATE
