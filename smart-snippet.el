@@ -752,7 +752,7 @@ more information."
       (while (re-search-forward (snippet-field-regexp)
                                 (end)
                                 t)
-        (let ((start (copy-marker (match-beginning 0) t)))
+        (let ((start (copy-marker (match-beginning 0) nil)))
           (replace-match (if (match-beginning 2) "\\2" ""))
           (push (cons start (copy-marker (point) t)) field-markers)))
 
