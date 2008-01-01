@@ -694,7 +694,7 @@ list if INCLUDE-SEPARATORS-P is non-nil."
           "\\|"
           (regexp-quote snippet-exit-identifier)))
 
-(defun snippet-insert (abbrev template)
+(defun smart-snippet-insert (abbrev template)
   "Insert a snippet into the current buffer at point.
 
 ABBREV is the abbrev text that is triggering this snippet, recorded
@@ -852,7 +852,7 @@ name, and the name of the abbrev.  If the abbrev table name ends in
                               "Expands to the following snippet:\n\n%s")
                       abbrev-name
                       template)
-             (snippet-insert ,abbrev-name ,template)))
+             (smart-snippet-insert ,abbrev-name ,template)))
     (put abbrev-expansion 'no-self-insert t)
     abbrev-expansion))
 
@@ -943,17 +943,17 @@ snippet's condition can be satisfied."
 
 (defun smart-snippet-try-expand (abbrev template condition)
   "Test CONDITION, if it satisfied, expand ABBREV with TEMPLATE
-using `snippet-insert'. Returning t to indicate that this expansion
+using `smart-snippet-insert'. Returning t to indicate that this expansion
 didn't take place, should try the successive one."
   (let ((abbrev-name abbrev)
         (in-comment? (smart-snippet-inside-comment-p))
         (bol? (looking-back "^[[:blank:]]*")))
     (cond ((and (functionp condition) (funcall condition))
-           (snippet-insert abbrev template)
+           (smart-snippet-insert abbrev template)
            t)
           ((and (or (symbolp condition) (listp condition))
                 (eval condition))
-           (snippet-insert abbrev template)
+           (smart-snippet-insert abbrev template)
            t)
           (t nil))))
 
