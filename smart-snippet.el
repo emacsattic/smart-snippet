@@ -392,7 +392,16 @@
 
 (defcustom snippet-indent "$>"
   "*String used to indicate that a line is to be indented."
-  :type 'character
+  :type 'string
+  :group 'snippet)
+
+(defcustom snippet-hard-indent "$]"
+  "*String used to indicate that a line is to be indented.
+The difference between this and `snippet-indent' is that
+`snippet-indent' is indented using `indent-according-to-mode'
+while this is indented by manually inserting number of spaces
+before the pos where the snippet is being expanded."
+  :type 'string
   :group 'snippet)
 
 (defcustom snippet-line-terminator "\n"
@@ -434,6 +443,7 @@ list.")
 (make-variable-buffer-local 'snippet-field-default-beg-char)
 (make-variable-buffer-local 'snippet-field-default-end-char)
 (make-variable-buffer-local 'snippet-indent)
+(make-variable-buffer-local 'snippet-hard-indent)
 (make-variable-buffer-local 'snippet-exit-identifier)
 (make-variable-buffer-local 'snippet-field-identifier)
 (make-variable-buffer-local 'snippet-escape-char-guard)
@@ -691,6 +701,8 @@ list if INCLUDE-SEPARATORS-P is non-nil."
   (concat (regexp-quote snippet-line-terminator)
           "\\|"
           (regexp-quote snippet-indent)
+	  "\\|"
+	  (regexp-quote snippet-hard-indent)
           "\\|"
           (regexp-quote snippet-exit-identifier)))
 
@@ -731,6 +743,7 @@ more information."
   ;; This enables our keymap to be active when a field happens to be
   ;; the last item in a template.
   (let ((start (point))
+	(hard-indent (make-string (current-column) ?\ ))
         (field-markers nil))
     (flet ((end () (min (point-max)
                         (overlay-end (snippet-bound snippet)))))
@@ -771,6 +784,11 @@ more information."
                              t)
         (replace-match "")
         (indent-according-to-mode))
+      (goto-char (overlay-start (snippet-bound snippet)))
+      (while (search-forward snippet-hard-indent
+			     (end)
+			     t)
+	(replace-match hard-indent))
 
       ;; Step 6: Recover escape characters
       (goto-char (overlay-start (snippet-bound snippet)))
