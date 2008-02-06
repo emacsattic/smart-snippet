@@ -1044,7 +1044,7 @@ All evaluation will be done under a circumstance where those
 variables are available:
 
  abbrev-name : the current abbrev-name being expanded
- inside-comment? : t if currently position is inside comment
+ in-comment? : t if currently position is inside comment
  bol? : beginning of line(whitespaces are ignored)
 "
   ;; first store the snippet template
